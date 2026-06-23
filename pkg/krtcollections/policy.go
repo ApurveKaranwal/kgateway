@@ -1094,6 +1094,12 @@ type RoutesIndex struct {
 	routes                               krt.Collection[RouteWrapper]
 	httpRouteStatusMarkers               krt.StatusCollection[*gwv1.HTTPRoute, StatusMarker]
 	httpRoutes                           krt.Collection[ir.HttpRouteIR]
+	grpcRouteStatusMarkers               krt.StatusCollection[*gwv1.GRPCRoute, StatusMarker]
+	grpcRoutes                           krt.Collection[ir.HttpRouteIR]
+	tcpRouteStatusMarkers                krt.StatusCollection[*gwv1a2.TCPRoute, StatusMarker]
+	tcpRoutes                            krt.Collection[ir.TcpRouteIR]
+	tlsRouteStatusMarkers                krt.StatusCollection[*gwv1a2.TLSRoute, StatusMarker]
+	tlsRoutes                            krt.Collection[ir.TlsRouteIR]
 	httpBySelector                       krt.Index[HTTPRouteSelector, ir.HttpRouteIR]
 	byParentRef                          krt.Index[TargetRefIndexKey, RouteWrapper]
 	weightedRoutePrecedence              bool
@@ -1112,7 +1118,7 @@ func (h *RoutesIndex) HasSynced() bool {
 			return false
 		}
 	}
-	return h.httpRoutes.HasSynced() && h.routes.HasSynced() && h.policies.HasSynced() && h.backends.HasSynced() && h.refgrants.HasSynced()
+	return h.httpRoutes.HasSynced() && h.grpcRoutes.HasSynced() && h.tcpRoutes.HasSynced() && h.tlsRoutes.HasSynced() && h.routes.HasSynced() && h.policies.HasSynced() && h.backends.HasSynced() && h.refgrants.HasSynced()
 }
 
 // HTTPRoutes returns the raw krt collection that contains only the HTTPRouteIR.
@@ -1138,6 +1144,75 @@ func (r *RoutesIndex) ProcessHTTPRouteStatusMarkers(
 			rp.Route(status.Obj)
 		}
 	}
+}
+
+// ProcessGRPCRouteStatusMarkers adds empty status in report map if no status reported for the marked route.
+// Used for clearing stale status for orphaned routes.
+func (r *RoutesIndex) ProcessGRPCRouteStatusMarkers(
+	objStatus []krt.ObjectWithStatus[*gwv1.GRPCRoute, StatusMarker],
+	reportMap reports.ReportMap,
+) {
+	for _, status := range objStatus {
+		routeKey := types.NamespacedName{
+			Namespace: status.Obj.GetNamespace(),
+			Name:      status.Obj.GetName(),
+		}
+
+		if reportMap.GRPCRoutes[routeKey] == nil {
+			rp := reports.NewReporter(&reportMap)
+			rp.Route(status.Obj)
+		}
+	}
+}
+
+// ProcessTCPRouteStatusMarkers adds empty status in report map if no status reported for the marked route.
+// Used for clearing stale status for orphaned routes.
+func (r *RoutesIndex) ProcessTCPRouteStatusMarkers(
+	objStatus []krt.ObjectWithStatus[*gwv1a2.TCPRoute, StatusMarker],
+	reportMap reports.ReportMap,
+) {
+	for _, status := range objStatus {
+		routeKey := types.NamespacedName{
+			Namespace: status.Obj.GetNamespace(),
+			Name:      status.Obj.GetName(),
+		}
+
+		if reportMap.TCPRoutes[routeKey] == nil {
+			rp := reports.NewReporter(&reportMap)
+			rp.Route(status.Obj)
+		}
+	}
+}
+
+// ProcessTLSRouteStatusMarkers adds empty status in report map if no status reported for the marked route.
+// Used for clearing stale status for orphaned routes.
+func (r *RoutesIndex) ProcessTLSRouteStatusMarkers(
+	objStatus []krt.ObjectWithStatus[*gwv1a2.TLSRoute, StatusMarker],
+	reportMap reports.ReportMap,
+) {
+	for _, status := range objStatus {
+		routeKey := types.NamespacedName{
+			Namespace: status.Obj.GetNamespace(),
+			Name:      status.Obj.GetName(),
+		}
+
+		if reportMap.TLSRoutes[routeKey] == nil {
+			rp := reports.NewReporter(&reportMap)
+			rp.Route(status.Obj)
+		}
+	}
+}
+
+func (h *RoutesIndex) GetGRPCRouteStatusMarkers() krt.StatusCollection[*gwv1.GRPCRoute, StatusMarker] {
+	return h.grpcRouteStatusMarkers
+}
+
+func (h *RoutesIndex) GetTCPRouteStatusMarkers() krt.StatusCollection[*gwv1a2.TCPRoute, StatusMarker] {
+	return h.tcpRouteStatusMarkers
+}
+
+func (h *RoutesIndex) GetTLSRouteStatusMarkers() krt.StatusCollection[*gwv1a2.TLSRoute, StatusMarker] {
+	return h.tlsRouteStatusMarkers
 }
 
 func NewRoutesIndex(
@@ -1169,19 +1244,30 @@ func NewRoutesIndex(
 		return &RouteWrapper{Route: &i}
 	}, krtopts.ToOptions("routes-http-routes-with-policy")...)
 
-	tcpRoutesCollection := krt.NewCollection(tcproutes, func(kctx krt.HandlerContext, i *gwv1a2.TCPRoute) *RouteWrapper {
-		t := h.transformTcpRoute(kctx, i)
-		return &RouteWrapper{Route: t}
+	h.grpcRouteStatusMarkers, h.grpcRoutes = krt.NewStatusCollection(grpcroutes, func(kctx krt.HandlerContext, i *gwv1.GRPCRoute) (*StatusMarker, *ir.HttpRouteIR) {
+		return h.transformGRPCRoute(kctx, i, controllerName)
+	}, krtopts.ToOptions("grpc-routes-with-policy")...)
+
+	grpcRoutesCollection := krt.NewCollection(h.grpcRoutes, func(kctx krt.HandlerContext, i ir.HttpRouteIR) *RouteWrapper {
+		return &RouteWrapper{Route: &i}
+	}, krtopts.ToOptions("routes-grpc-routes-with-policy")...)
+
+	h.tcpRouteStatusMarkers, h.tcpRoutes = krt.NewStatusCollection(tcproutes, func(kctx krt.HandlerContext, i *gwv1a2.TCPRoute) (*StatusMarker, *ir.TcpRouteIR) {
+		return h.transformTcpRoute(kctx, i, controllerName)
+	}, krtopts.ToOptions("tcp-routes-with-policy")...)
+
+	tcpRoutesCollection := krt.NewCollection(h.tcpRoutes, func(kctx krt.HandlerContext, i ir.TcpRouteIR) *RouteWrapper {
+		return &RouteWrapper{Route: &i}
 	}, krtopts.ToOptions("routes-tcp-routes-with-policy")...)
 
-	tlsRoutesCollection := krt.NewCollection(tlsroutes, func(kctx krt.HandlerContext, i *gwv1a2.TLSRoute) *RouteWrapper {
-		t := h.transformTlsRoute(kctx, i)
-		return &RouteWrapper{Route: t}
+	h.tlsRouteStatusMarkers, h.tlsRoutes = krt.NewStatusCollection(tlsroutes, func(kctx krt.HandlerContext, i *gwv1a2.TLSRoute) (*StatusMarker, *ir.TlsRouteIR) {
+		return h.transformTlsRoute(kctx, i, controllerName)
+	}, krtopts.ToOptions("tls-routes-with-policy")...)
+
+	tlsRoutesCollection := krt.NewCollection(h.tlsRoutes, func(kctx krt.HandlerContext, i ir.TlsRouteIR) *RouteWrapper {
+		return &RouteWrapper{Route: &i}
 	}, krtopts.ToOptions("routes-tls-routes-with-policy")...)
-	grpcRoutesCollection := krt.NewCollection(grpcroutes, func(kctx krt.HandlerContext, i *gwv1.GRPCRoute) *RouteWrapper {
-		t := h.transformGRPCRoute(kctx, i)
-		return &RouteWrapper{Route: t}
-	}, krtopts.ToOptions("routes-grpc-routes-with-policy")...)
+
 	h.routes = krt.JoinCollection([]krt.Collection[RouteWrapper]{httpRouteCollection, grpcRoutesCollection, tcpRoutesCollection, tlsRoutesCollection}, krtopts.ToOptions("all-routes-with-policy")...)
 
 	httpBySelector := krtpkg.UnnamedIndex(h.httpRoutes, func(i ir.HttpRouteIR) []HTTPRouteSelector {
@@ -1290,7 +1376,7 @@ func (h *RoutesIndex) Fetch(kctx krt.HandlerContext, gk schema.GroupKind, ns, n 
 	return krt.FetchOne(kctx, h.routes, krt.FilterKey(src.ResourceName()))
 }
 
-func (h *RoutesIndex) transformTcpRoute(kctx krt.HandlerContext, i *gwv1a2.TCPRoute) *ir.TcpRouteIR {
+func (h *RoutesIndex) transformTcpRoute(kctx krt.HandlerContext, i *gwv1a2.TCPRoute, controllerName string) (*StatusMarker, *ir.TcpRouteIR) {
 	src := ir.ObjectSource{
 		Group:     gwv1a2.GroupVersion.Group,
 		Kind:      "TCPRoute",
@@ -1301,7 +1387,16 @@ func (h *RoutesIndex) transformTcpRoute(kctx krt.HandlerContext, i *gwv1a2.TCPRo
 	if len(i.Spec.Rules) > 0 {
 		backends = i.Spec.Rules[0].BackendRefs
 	}
-	return &ir.TcpRouteIR{
+
+	var statusMarker *StatusMarker
+	for _, parentStatus := range i.Status.Parents {
+		if string(parentStatus.ControllerName) == controllerName {
+			statusMarker = &StatusMarker{}
+			break
+		}
+	}
+
+	return statusMarker, &ir.TcpRouteIR{
 		ObjectSource:     src,
 		SourceObject:     i,
 		ParentRefs:       i.Spec.ParentRefs,
@@ -1310,7 +1405,7 @@ func (h *RoutesIndex) transformTcpRoute(kctx krt.HandlerContext, i *gwv1a2.TCPRo
 	}
 }
 
-func (h *RoutesIndex) transformTlsRoute(kctx krt.HandlerContext, i *gwv1a2.TLSRoute) *ir.TlsRouteIR {
+func (h *RoutesIndex) transformTlsRoute(kctx krt.HandlerContext, i *gwv1a2.TLSRoute, controllerName string) (*StatusMarker, *ir.TlsRouteIR) {
 	src := ir.ObjectSource{
 		Group:     gwv1a2.GroupVersion.Group,
 		Kind:      "TLSRoute",
@@ -1321,7 +1416,16 @@ func (h *RoutesIndex) transformTlsRoute(kctx krt.HandlerContext, i *gwv1a2.TLSRo
 	if len(i.Spec.Rules) > 0 {
 		backends = i.Spec.Rules[0].BackendRefs
 	}
-	return &ir.TlsRouteIR{
+
+	var statusMarker *StatusMarker
+	for _, parentStatus := range i.Status.Parents {
+		if string(parentStatus.ControllerName) == controllerName {
+			statusMarker = &StatusMarker{}
+			break
+		}
+	}
+
+	return statusMarker, &ir.TlsRouteIR{
 		ObjectSource:     src,
 		SourceObject:     i,
 		ParentRefs:       i.Spec.ParentRefs,
