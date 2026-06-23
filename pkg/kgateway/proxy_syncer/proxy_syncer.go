@@ -376,6 +376,15 @@ func (s *ProxySyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) {
 		objStatus := krt.Fetch(kctx, s.commonCols.Routes.GetHTTPRouteStatusMarkers())
 		s.commonCols.Routes.ProcessHTTPRouteStatusMarkers(objStatus, merged)
 
+		grpcObjStatus := krt.Fetch(kctx, s.commonCols.Routes.GetGRPCRouteStatusMarkers())
+		s.commonCols.Routes.ProcessGRPCRouteStatusMarkers(grpcObjStatus, merged)
+
+		tcpObjStatus := krt.Fetch(kctx, s.commonCols.Routes.GetTCPRouteStatusMarkers())
+		s.commonCols.Routes.ProcessTCPRouteStatusMarkers(tcpObjStatus, merged)
+
+		tlsObjStatus := krt.Fetch(kctx, s.commonCols.Routes.GetTLSRouteStatusMarkers())
+		s.commonCols.Routes.ProcessTLSRouteStatusMarkers(tlsObjStatus, merged)
+
 		for _, plugin := range s.plugins.ContributesPolicies {
 			if plugin.ProcessPolicyStaleStatusMarkers != nil && (plugin.ProcessBackend == nil || plugin.PolicyStatusFromGatewayReports) {
 				plugin.ProcessPolicyStaleStatusMarkers(kctx, &merged)
