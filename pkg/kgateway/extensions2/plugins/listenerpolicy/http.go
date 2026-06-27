@@ -3,7 +3,6 @@ package listenerpolicy
 import (
 	"fmt"
 	"net"
-	"reflect"
 	"slices"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	envoyxffv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/http/original_ip_detection/xff/v3"
 	envoyuuidv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/request_id/uuid/v3"
 	envoymatcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"istio.io/istio/pkg/kube/krt"
@@ -87,7 +87,7 @@ func (d *HttpListenerPolicyIr) Equals(in any) bool {
 		return false
 	}
 	if !slices.EqualFunc(d.accessLogPolicies, d2.accessLogPolicies, func(log kgateway.AccessLog, log2 kgateway.AccessLog) bool {
-		return reflect.DeepEqual(log, log2)
+		return cmp.Equal(log, log2)
 	}) {
 		return false
 	}
@@ -141,7 +141,7 @@ func (d *HttpListenerPolicyIr) Equals(in any) bool {
 	}
 
 	// Check serverHeaderTransformation
-	if d.serverHeaderTransformation != d2.serverHeaderTransformation {
+	if !cmputils.PointerValsEqual(d.serverHeaderTransformation, d2.serverHeaderTransformation) {
 		return false
 	}
 

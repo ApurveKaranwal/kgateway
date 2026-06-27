@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 
 	xdscorev3 "github.com/cncf/xds/go/xds/core/v3"
 	xdsmatcherv3 "github.com/cncf/xds/go/xds/type/matcher/v3"
@@ -71,7 +70,10 @@ func (e TrafficPolicyGatewayExtensionIR) Equals(other TrafficPolicyGatewayExtens
 	if e.PrecedenceWeight != other.PrecedenceWeight {
 		return false
 	}
-	if !reflect.DeepEqual(e.FilterStage, other.FilterStage) {
+	if (e.FilterStage == nil) != (other.FilterStage == nil) {
+		return false
+	}
+	if e.FilterStage != nil && *e.FilterStage != *other.FilterStage {
 		return false
 	}
 

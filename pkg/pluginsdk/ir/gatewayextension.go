@@ -1,8 +1,7 @@
 package ir
 
 import (
-	"reflect"
-
+	"github.com/google/go-cmp/cmp"
 	"istio.io/istio/pkg/kube/krt"
 
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1/kgateway"
@@ -46,22 +45,22 @@ func (e GatewayExtension) ResourceName() string {
 }
 
 func (e GatewayExtension) Equals(other GatewayExtension) bool {
-	if e.ObjectSource != other.ObjectSource {
+	if !e.ObjectSource.Equals(other.ObjectSource) {
 		return false
 	}
-	if !reflect.DeepEqual(e.ExtAuth, other.ExtAuth) {
+	if !cmp.Equal(e.ExtAuth, other.ExtAuth) {
 		return false
 	}
-	if !reflect.DeepEqual(e.ExtProc, other.ExtProc) {
+	if !cmp.Equal(e.ExtProc, other.ExtProc) {
 		return false
 	}
-	if !reflect.DeepEqual(e.RateLimit, other.RateLimit) {
+	if !cmp.Equal(e.RateLimit, other.RateLimit) {
 		return false
 	}
-	if !reflect.DeepEqual(e.JWT, other.JWT) {
+	if !cmp.Equal(e.JWT, other.JWT) {
 		return false
 	}
-	if !reflect.DeepEqual(e.OAuth2, other.OAuth2) {
+	if !cmp.Equal(e.OAuth2, other.OAuth2) {
 		return false
 	}
 	if e.PrecedenceWeight != other.PrecedenceWeight {

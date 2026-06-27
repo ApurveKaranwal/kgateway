@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/google/go-cmp/cmp"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/smallset"
@@ -465,9 +465,9 @@ func (c Listener) Equals(in Listener) bool {
 	if c.Parent != nil && !versionEquals(c.Parent, in.Parent) {
 		return false
 	}
-	return reflect.DeepEqual(c.Listener, in.Listener) &&
+	return cmp.Equal(c.Listener, in.Listener) &&
 		c.AttachedPolicies.Equals(in.AttachedPolicies) &&
-		reflect.DeepEqual(c.PolicyAncestorRef, in.PolicyAncestorRef)
+		cmp.Equal(c.PolicyAncestorRef, in.PolicyAncestorRef)
 }
 
 type GatewayForDeployer struct {
